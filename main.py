@@ -5,6 +5,9 @@ import paramiko
 import time
 import requests
 import digitalocean
+import hmac
+import hashlib
+import base64
 
 app = Flask(__name__)
 
@@ -12,32 +15,32 @@ app = Flask(__name__)
 @app.route('/', methods=['POST'])
 def main():
     print('==============VALID MESSAGE INCOMING==============')
+    secret = '<SECRET HERE>'
+    body = request.data
+    body = str(body)
+    body = body[2:-1]
+    dig = hmac.new(secret.encode(), msg=body.encode(), digestmod=hashlib.sha256).digest()
+    if request.headers.get('X-WC-Webhook-Signature') != base64.b64encode(dig).decode():
+        return 'invalid signature'
+    else:
+        print('Webhook auth correct!')
     # Parse JSON
     data = request.data
     data = str(data)
     data = data[2:-1]
-    data = json.loads(data)
+    try:
+        data = json.loads(data)
+    except:
+        return 'Load Error'
     print('Data Loaded!')
     email = data['billing']['email']
-    manager = digitalocean.Manager(token="TOKENHERE")
-
-
-    try:
-        print('Adding Key...')
-        key = digitalocean.SSHKey(token='TOKENHERE',
-                                  name=data['number'],
-                                  public_key=data['customer_note'])
-        key.create()
-        print('Key Added!')
-    except:
-        print('Key already exists!')
+    manager = digitalocean.Manager(token="<TOKEN HERE>")
 
     keys = manager.get_all_sshkeys()
-    input (keys)
-    keystore = [keys[len(keys) - 1], keys[1]]
+    keystore = [keys[1]]
 
     print('Creating Droplet...')
-    droplet = digitalocean.Droplet(token='TOKENHERE',
+    droplet = digitalocean.Droplet(token='<TOKEN HERE>',
                                    name=data['number'],
                                    region='fra1',
                                    image='plesk-18-04',
@@ -66,7 +69,7 @@ def main():
         ssh = paramiko.client.SSHClient()
         keyfile = 'ssh/SSH'
         k = paramiko.RSAKey.from_private_key_file(keyfile,
-                                                  password='SSHPASSHERE')
+                                                  password='<PASS HERE>')
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh.connect(ip, username='root', pkey=k)
         print('Grabbing Plesk login link')
@@ -76,7 +79,7 @@ def main():
         print('Done proccessing droplet. Sending request to email...')
         ssh.close()
         data2send = {'link': link, 'email': email, 'ipv4': ip}
-        res = requests.post('OUTHOOK', json=data2send)
+        res = requests.post('<WEEBHOOK OUT HERE>', json=data2send)
         print('response from server:', res.text)
         dict_from_server = res.json()
         print(dict_from_server)
@@ -87,6 +90,6 @@ def main():
 
 
 if __name__ == '__main__':
-    app.run(host='example.com', port=443, ssl_context=(
-        '/etc/letsencrypt/live/example.com/fullchain.pem',
-        '/etc/letsencrypt/live/example.com/privkey.pem'))
+    app.run(host='<URL HERE>', port=443, ssl_context=(
+        '<LENC HERE>/fullchain.pem',
+        '<LENC HERE>/privkey.pem'))
